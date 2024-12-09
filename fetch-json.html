@@ -1,0 +1,10 @@
+fetch("http://localhost:5050/collection/lessons")
+    .then(response => response.json())
+    .then(data => {
+        console.log(data);
+        this.lessons = data;  // Bind the data to your Vue.js model
+    })
+    .catch(error => {
+        console.error(error);
+        alert("Failed to fetch lessons.");
+    });
