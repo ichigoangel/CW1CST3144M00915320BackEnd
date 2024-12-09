@@ -19,6 +19,39 @@ app.use((req, res, next) => {
 
 let db;
 
+// MongoDB Atlas connection URI (replace with your MongoDB Atlas connection string)
+const mongoURI = "mongodb+srv://svmaze27:SB1kZhm5GKvkFGfe@cluster0.tujxpsf.mongodb.net/";
+
+// Connect to MongoDB Atlas
+MongoClient.connect(mongoURI, { useUnifiedTopology: true })
+    .then(client => {
+        db = client.db("CWCST3144M00915320coursework"); // Access the database
+        console.log("Connected to MongoDB Atlas");
+    })
+    .catch(err => {
+        console.error("Failed to connect to MongoDB:", err);
+    });
+
+// Default route
+app.get("/", (req, res) => {
+    res.send("Welcome to the After School Club API! Use routes like /collection/lessons or /collection/orders");
+});
+
+// Middleware to handle collection routing
+app.param("collectionName", (req, res, next, collectionName) => {
+    req.collection = db.collection(collectionName);
+    next();
+});
+
+// Fetch all documents from a collection (lessons in this case)
+app.get("/collection/:collectionName", (req, res, next) => {
+    req.collection
+        .find({})
+        .toArray((err, results) => {
+            if (err) return next(err);
+            res.json(results);
+        });
+});
 
 // Add multiple products to the collection
 app.post("/collection/Lesson", (req, res, next) => {
