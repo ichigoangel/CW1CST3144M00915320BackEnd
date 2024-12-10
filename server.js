@@ -1,41 +1,34 @@
 const express = require("express");
 const { MongoClient, ObjectID } = require("mongodb");
+const morgan = require("morgan");
+const cors = require("cors");
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 5050;  // Make sure the backend uses the right port
 
-// Middleware for JSON parsing and CORS setup
-app.use(express.json());
-app.use((req, res, next) => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Credentials", "true");
-    res.setHeader("Access-Control-Allow-Methods", "GET,HEAD,OPTIONS,POST,PUT,DELETE");
-    res.setHeader(
-        "Access-Control-Allow-Headers",
-        "Access-Control-Allow-Headers, Origin,Accept, X-Requested-With, Content-Type, Access-Control-Request-Method, Access-Control-Request-Headers"
-    );
-    next();
-});
- 
-// MongoDB connection
-const connectionURI = "mongodb+srv://svmaze27:SB1kZhm5GKvkFGfe@cluster0.tujxpsf.mongodb.net/";
+// Middleware for JSON parsing, CORS setup, and logging
+app.use(morgan("dev")); // Logs all incoming requests
+app.use(express.json());  // Parses incoming JSON requests
+app.use(cors());  // Enable Cross-Origin Resource Sharing (CORS)
+
+// MongoDB connection URI
+const connectionURI = "mongodb+srv://svmaze27:SB1kZhm5GKvkFGfe@cluster0.tujxpsf.mongodb.net/CWCST3144M00915320coursework";
 let db;
 
+// Connect to MongoDB
 async function connectToDB() {
     try {
         const client = new MongoClient(connectionURI, { useUnifiedTopology: true });
         await client.connect();
         console.log("Connected to MongoDB");
-        // Select the database
-        db = client.db("CWCST3144M00915320coursework");
-        console.log("Database selected: CWCST3144M00915320coursework");
+        db = client.db("CWCST3144M00915320coursework");  // Use the correct database name
     } catch (error) {
         console.error("Error connecting to MongoDB:", error);
-        process.exit(1); // Exit the process if the database connection fails
+        process.exit(1);  // Exit if the connection fails
     }
 }
 
-// Middleware to handle collection routing
+// Middleware for dynamic collection routing (for fetching and interacting with specific collections)
 app.param("collectionName", (req, res, next, collectionName) => {
     try {
         if (!db) throw new Error("Database connection not established");
@@ -48,79 +41,62 @@ app.param("collectionName", (req, res, next, collectionName) => {
     }
 });
 
-// Default route
+// Serve static images from the /images folder
+app.use("/images", express.static("images"));  // Make sure to have an images folder in your backend
+
+// Default route for the API
 app.get("/", (req, res) => {
-    res.send("Welcome to the After School Club API! Use routes like /collection/Lesson or /collection/Order");
+    res.send("Welcome to the After School Club API! Use routes like /lessons to view lessons or /orders to place orders.");
 });
 
-// Fetch all documents from a collection
+// Fetch all lessons from the "Lessons" collection
 app.get("/collection/:collectionName", async (req, res, next) => {
     try {
         const results = await req.collection.find({}).toArray();
-        res.json(results);
+        res.json(results);  // Send the lessons data back in JSON format
     } catch (err) {
-        next(err);
+        next(err);  // Pass the error to the error-handling middleware
     }
 });
 
-// Add multiple products to the collection
-app.post("/collection/:collectionName", async (req, res, next) => {
+// Add a new order to the "Orders" collection
+app.post("/orders", async (req, res, next) => {
     try {
-        const products = req.body;
-        const result = await req.collection.insertMany(products);
-        res.json({ insertedCount: result.insertedCount });
+        const order = req.body;  // Get the order data from the request body
+        const result = await db.collection("Orders").insertOne(order);  // Insert the order into the "Orders" collection
+        res.json({ insertedCount: result.insertedCount });  // Send back a success response
     } catch (err) {
-        next(err);
+        next(err);  // Pass any error to the error-handling middleware
     }
 });
 
-// Fetch a specific document by ID
-app.get("/collection/:collectionName/:id", async (req, res, next) => {
-    try {
-        const result = await req.collection.findOne({ _id: new ObjectID(req.params.id) });
-        res.json(result);
-    } catch (err) {
-        next(err);
-    }
-});
-
-// Update a specific document by ID
-app.put("/collection/:collectionName/:id", async (req, res, next) => {
+// Update a specific lesson's availability (spaces) after an order is placed
+app.put("/lessons/:id", async (req, res, next) => {
     try {
         const result = await req.collection.updateOne(
-            { _id: new ObjectID(req.params.id) },
-            { $set: req.body }
+            { _id: new ObjectID(req.params.id) },  // Find the lesson by its ID
+            { $set: { spaces: req.body.spaces } }  // Update the number of available spaces
         );
-        res.json(result.modifiedCount === 1 ? { msg: "success" } : { msg: "error" });
+        res.json(result.modifiedCount === 1 ? { msg: "success" } : { msg: "error" });  // Return success or error based on the result
     } catch (err) {
-        next(err);
+        next(err);  // Pass the error to the error-handling middleware
     }
 });
 
-// Delete a specific document by ID
-app.delete("/collection/:collectionName/:id", async (req, res, next) => {
-    try {
-        const result = await req.collection.deleteOne({ _id: new ObjectID(req.params.id) });
-        res.json(result.deletedCount === 1 ? { msg: "success" } : { msg: "error" });
-    } catch (err) {
-        next(err);
-    }
-});
-
-// Error-handling middleware
+// Error-handling middleware for uncaught errors
 app.use((err, req, res, next) => {
-    console.error("Error occurred:", err.message);
-    res.status(500).json({ error: err.message });
+    console.error("Error occurred:", err.message);  // Log the error
+    res.status(500).json({ error: err.message });  // Send a 500 status code with the error message
 });
 
-// Error handler for unmatched routes
+// Error handler for unmatched routes (404)
 app.use((req, res) => {
-    res.status(404).send("File not found!");
+    res.status(404).send("File not found!");  // If no route matches, return a 404 error
 });
 
 // Start the server
 connectToDB().then(() => {
     app.listen(PORT, () => {
-        console.log(`Server running on http://localhost:${PORT}`);
+        console.log(`Server running on http://localhost:${PORT}`);  // Start the server on the specified port
     });
 });
