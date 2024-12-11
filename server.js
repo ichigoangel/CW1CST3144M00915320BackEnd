@@ -96,15 +96,8 @@ app.post('/collection/:collectionName', async (req, res, next) => {
 
 
 // Add a new document to a collection
-// app.post("/collection/order", async (req, res, next) => {
-//     try {
-//         const document = req.body; // Get data from the request body
-//         const result = await req.collection.insertOne(document);
-//         res.status(201).json(result.ops[0]);
-//     } catch (err) {
-//         next(err);
-//     }
-// });
+
+
 
 // Retrieve a document by ID from a specified collection
 const ObjectID = require('mongodb').ObjectID; 
