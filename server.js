@@ -80,40 +80,53 @@ app.get("/collection/:collectionName/:id", async (req, res, next) => {
 });
 
 // Add a new document to a specified collection
-app.post('/collection/:collectionName', async (req, res, next) => {
+app.post('/collection/order', async (req, res, next) => {
     try {
-        const documents = req.body; // Expect an array of objects
-        if (!Array.isArray(documents)) {
-            return res.status(400).json({ error: "Request body should be an array of objects." });
+        // Ensure the request body is an array
+        const newOrder = req.body;
+        if (!Array.isArray(newOrder)) {
+            return res.status(400).json({ error: "Request body should be an array." });
         }
-        const result = await req.collection.insertMany(documents);
-        res.status(201).json(result.ops); // Return the inserted documents
+
+        // Log the received data for debugging
+        console.log("Received new order data:", newOrder);
+
+        // Insert the data into the 'order' collection
+        const result = await req.collection.insertMany(newOrder);
+        
+        // Log the result of the insertion for debugging
+        console.log("Inserted order:", result.ops);
+
+        // Send the inserted data back as a response
+        res.status(201).json(result.ops);
     } catch (err) {
-        next(err);
+        console.error("Error inserting order:", err);
+        res.status(500).json({ error: "Internal server error" });
     }
 });
+
 
 
 // Add a new order to the "order" collection
 app.post('/collection/order', async (req, res, next) => {
     try {
-        const newOrder = req.body; // The request body will contain the new order data
-        
-        // Check if the data is an array. If so, treat it as an array of orders.
-        // If it's not an array, make it an array (you can remove this logic if you're only expecting single orders).
+        const newOrder = req.body;
+        console.log("Received order data:", newOrder); // Log the received data
+
         if (!Array.isArray(newOrder)) {
             return res.status(400).json({ error: "Request body should be an array of objects." });
         }
 
-        // Insert the new order(s) into the "order" collection
         const result = await req.collection.insertMany(newOrder);
-        
-        // Respond with the inserted order(s) or a success message
-        res.status(201).json(result.ops); // Send back the inserted orders
+        console.log("Inserted order:", result.ops); // Log the inserted data
+
+        res.status(201).json(result.ops);
     } catch (err) {
-        next(err); // Handle any errors that occur
+        console.error("Error inserting order:", err); // Log the error
+        next(err);
     }
 });
+
 
 
 
