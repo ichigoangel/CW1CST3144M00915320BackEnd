@@ -7,9 +7,21 @@ var fs = require("fs");
 const app = express();
 const PORT = process.env.PORT || 5050;
 
+// Simple Logger Function
+const logger = (level, message) => {
+    const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}] [${level.toUpperCase()}] ${message}`);
+};
+
 // Middleware for JSON parsing, CORS setup, and logging
 app.use(express.json()); // Parses incoming JSON requests
 app.use(cors()); // Enable Cross-Origin Resource Sharing (CORS)
+
+// Middleware for logging incoming requests
+app.use((req, res, next) => {
+    logger("info", `Incoming request: ${req.method} ${req.originalUrl}`);
+    next();
+});
 
 // Middleware for enabling Cross-Origin Resource Sharing (CORS)
 app.use((req, res, next) => {
@@ -28,10 +40,10 @@ async function connectToDB() {
     try {
         const client = new MongoClient(connectionURI, { useUnifiedTopology: true });
         await client.connect();
-        console.log("Connected to MongoDB");
+        logger("info", "Connected to MongoDB");
         db = client.db("CWCST3144M00915320coursework"); // Use the correct database name
     } catch (error) {
-        console.error("Error connecting to MongoDB:", error);
+        logger("error", `Error connecting to MongoDB: ${error}`);
         process.exit(1); // Exit if the connection fails
     }
 }
@@ -45,6 +57,7 @@ app.param("collectionName", (req, res, next, collectionName) => {
         req.collection = collection;
         next();
     } catch (error) {
+        logger("error", error.message);
         next(error);
     }
 });
@@ -61,8 +74,10 @@ app.get("/", (req, res) => {
 app.get("/collection/:collectionName", async (req, res, next) => {
     try {
         const results = await req.collection.find({}).toArray();
+        logger("info", `Fetched all documents from collection: ${req.params.collectionName}`);
         res.json(results);
     } catch (err) {
+        logger("error", `Error fetching documents from collection: ${req.params.collectionName}`);
         next(err);
     }
 });
@@ -72,72 +87,56 @@ app.get("/collection/:collectionName/:id", async (req, res, next) => {
     try {
         const id = new ObjectId(req.params.id); // Convert string ID to MongoDB ObjectId
         const result = await req.collection.findOne({ _id: id });
-        if (!result) return res.status(404).json({ error: "Document not found" });
-        res.json(result);
+        if (!result){
+            logger("warn", `Document with ID ${req.params.id} not found in collection: ${req.params.collectionName}`);
+             return res.status(404).json({ error: "Document not found" });
+        }
+             res.json(result);
     } catch (err) {
         next(err);
     }
 });
 
-// Add a new document to a specified collection
-app.post('/collection/order', async (req, res, next) => {
+// Corrected single POST endpoint for inserting orders
+app.post('/collection/:collectionName', async (req, res, next) => {
     try {
-        // Ensure the request body is an array
         const newOrder = req.body;
+
+        // Validate the request body
         if (!Array.isArray(newOrder)) {
-            return res.status(400).json({ error: "Request body should be an array." });
+            logger("warn", "Request body is not an array of objects");
+            return res.status(400).json({ error: "Request body should be an array of objects." });
         }
 
-        // Log the received data for debugging
-        console.log("Received new order data:", newOrder);
-
-        // Insert the data into the 'order' collection
         const result = await req.collection.insertMany(newOrder);
-        
-        // Log the result of the insertion for debugging
-        console.log("Inserted order:", result.ops);
-
-        // Send the inserted data back as a response
-        res.status(201).json(result.ops);
+        logger("info", `Inserted new documents: ${JSON.stringify(result.insertedIds)}`);
+        res.status(201).json(result.insertedIds); // Return the inserted IDs
     } catch (err) {
-        console.error("Error inserting order:", err);
+        logger("error", "Error inserting documents");
         res.status(500).json({ error: "Internal server error" });
     }
 });
-
 
 
 // Add a new order to the "order" collection
 app.post('/collection/order', async (req, res, next) => {
     try {
         const newOrder = req.body;
-        console.log("Received order data:", newOrder); // Log the received data
+        logger("info", `Received order data: ${JSON.stringify(newOrder)}`);
 
         if (!Array.isArray(newOrder)) {
+            logger("warn", "Request body is not an array of objects");
             return res.status(400).json({ error: "Request body should be an array of objects." });
         }
 
         const result = await req.collection.insertMany(newOrder);
-        console.log("Inserted order:", result.ops); // Log the inserted data
-
+        logger("info", `Inserted order: ${JSON.stringify(result.ops)}`);
         res.status(201).json(result.ops);
     } catch (err) {
-        console.error("Error inserting order:", err); // Log the error
+        logger("error", `Error inserting order: ${err}`);
         next(err);
     }
 });
-
-
-
-
-// Retrieve a document by ID from a specified collection
-const ObjectID = require('mongodb').ObjectID; 
-app.get('/collection/:collectionName/:id', (req, res, next) => { 
-    req.collection.findOne({ _id: new ObjectID(req.params.id) }, (e, result) => { 
-        if (e) return next(e); 
-        res.send(result); 
-    }); 
-    });
 
 // Update a specific document by ID in a collection
 app.put("/collection/:collectionName/:id", async (req, res, next) => {
@@ -147,6 +146,7 @@ app.put("/collection/:collectionName/:id", async (req, res, next) => {
 
         // Validate that the body is an object
         if (Array.isArray(updates)) {
+            logger("warn", "Request body should be a single object, not an array.");
             return res.status(400).json({ error: "Request body should be a single object, not an array." });
         }
         
@@ -156,10 +156,13 @@ app.put("/collection/:collectionName/:id", async (req, res, next) => {
         );
 
         if (result.matchedCount === 0) {
+            logger("warn", `Document with ID ${req.params.id} not found for update`);
             return res.status(404).json({ error: "Document not found" });
         }
+        logger("info", `Document with ID ${req.params.id} updated successfully`);
         res.json({ msg: "Document updated successfully" });
     } catch (err) {
+        logger("error", `Error updating document with ID ${req.params.id}: ${err}`);
         next(err);
     }
 });
@@ -179,6 +182,7 @@ app.use(function(req, res, next) {
 
  // Handle 404 errors for undefined routes
  app.use(function(req, res) { 
+    logger("warn", `File not found: ${req.originalUrl}`);
     res.status(404); // Set status to 404
     res.send("File not found!"); 
     });
@@ -186,6 +190,6 @@ app.use(function(req, res, next) {
 // Start the server
 connectToDB().then(() => {
     app.listen(PORT, () => {
-        console.log(`Server running on http://localhost:${PORT}`);
+        logger("info", `Server running on http://localhost:${PORT}`);
     });
 });
